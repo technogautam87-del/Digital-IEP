@@ -1,0 +1,6 @@
+{
+  "name": "Digital IEP System",
+  "description": "Bilingual Individualized Education Program (IEP) portal with automatic age calculation from Birthdate, support for all 21 RPwD Act disabilities, and full administrative configuration over checklists, behaviors, and domains.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
