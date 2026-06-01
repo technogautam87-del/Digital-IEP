@@ -31,6 +31,58 @@ import {
   calculateAge 
 } from "../language";
 
+const RAJASTHAN_DISTRICTS = [
+  { en: "Ajmer", hi: "अजमेर" },
+  { en: "Alwar", hi: "अलवर" },
+  { en: "Anupgarh", hi: "अनूपगढ़" },
+  { en: "Balotra", hi: "बालोतरा" },
+  { en: "Baran", hi: "बारां" },
+  { en: "Barmer", hi: "बाड़मेर" },
+  { en: "Beawar", hi: "ब्यावर" },
+  { en: "Bharatpur", hi: "भरतपुर" },
+  { en: "Bhilwara", hi: "भीलवाड़ा" },
+  { en: "Bikaner", hi: "बीकानेर" },
+  { en: "Bundi", hi: "बूंदी" },
+  { en: "Chittorgarh", hi: "चित्तौड़गढ़" },
+  { en: "Churu", hi: "चुरू" },
+  { en: "Dausa", hi: "दौसा" },
+  { en: "Deeg", hi: "डीग" },
+  { en: "Dholpur", hi: "धौलपुर" },
+  { en: "Didwana-Kuchaman", hi: "डीडवाना-कुचामन" },
+  { en: "Dudu", hi: "दूदू" },
+  { en: "Dungarpur", hi: "डूंगरपुर" },
+  { en: "Gangapur City", hi: "गंगापुर सिटी" },
+  { en: "Hanumangarh", hi: "हनुमानगढ़" },
+  { en: "Jaipur", hi: "जयपुर" },
+  { en: "Jaipur Rural", hi: "जयपुर ग्रामीण" },
+  { en: "Jaisalmer", hi: "जैसलमेर" },
+  { en: "Jalore", hi: "जालौर" },
+  { en: "Jhalawar", hi: "झालावाड़" },
+  { en: "Jhunjhunu", hi: "झुंझुनू" },
+  { en: "Jodhpur", hi: "जोधपुर" },
+  { en: "Jodhpur Rural", hi: "जोधपुर ग्रामीण" },
+  { en: "Karauli", hi: "करौली" },
+  { en: "Kekri", hi: "केकड़ी" },
+  { en: "Khairthal-Tijara", hi: "खैरथल-तिजारा" },
+  { en: "Kota", hi: "कोटा" },
+  { en: "Kotputli-Behror", hi: "कोटपुतली-बहरोड़" },
+  { en: "Nagaur", hi: "नागौर" },
+  { en: "Neem Ka Thana", hi: "नीम का थाना" },
+  { en: "Pali", hi: "पाली" },
+  { en: "Phalodi", hi: "फलोदी" },
+  { en: "Pratapgarh", hi: "प्रतापगढ़" },
+  { en: "Rajsamand", hi: "राजसमंद" },
+  { en: "Salumbar", hi: "सलूंबर" },
+  { en: "Sanchore", hi: "सांचौर" },
+  { en: "Sawai Madhopur", hi: "सवाई माधोपुर" },
+  { en: "Shahpura", hi: "शाहपुरा" },
+  { en: "Sikar", hi: "सीकर" },
+  { en: "Sirohi", hi: "सिरोही" },
+  { en: "Sri Ganganagar", hi: "श्री गंगानगर" },
+  { en: "Tonk", hi: "टोंक" },
+  { en: "Udaipur", hi: "उदयपुर" }
+];
+
 // Premium background watermark overlay
 const WatermarkOverlay = () => (
   <div className="absolute inset-0 pointer-events-none select-none overflow-hidden z-20 opacity-[0.035] print:opacity-[0.05] min-h-full">
@@ -212,6 +264,78 @@ export default function StudentProfileView({
   // Each domain is considered complete if at least 1 checkbox in it is selected.
   const activeDomainsList = Object.keys(checklists);
   const currentIndex = activeDomainsList.indexOf(activeDomain);
+
+  // States to monitor unsaved changes before transitioning domains
+  const [pendingNextDomain, setPendingNextDomain] = useState<string | null>(null);
+  const [showUnsavedConfirmDialog, setShowUnsavedConfirmDialog] = useState(false);
+
+  const checkHasUnsavedChanges = (domainToCheck: string): boolean => {
+    const savedRecord = studentsList.find(s => s.id === (profile.studentId || activeStudentId));
+    if (!savedRecord) {
+      const currentItems = checklists[domainToCheck] || [];
+      const hasAnyChecked = currentItems.some(item => item.checked);
+      const currentNotesText = notes[domainToCheck] || "";
+      const hasAnyNotes = currentNotesText.trim() !== "";
+      return hasAnyChecked || hasAnyNotes;
+    }
+
+    const savedItems = savedRecord.checklists[domainToCheck] || [];
+    const currentItems = checklists[domainToCheck] || [];
+    
+    // Check if lengths differ or checked attributes differ
+    const savedCheckedIds = savedItems.filter(item => item.checked).map(item => item.id).sort().join(",");
+    const currentCheckedIds = currentItems.filter(item => item.checked).map(item => item.id).sort().join(",");
+    if (savedCheckedIds !== currentCheckedIds) {
+      return true;
+    }
+
+    const savedNotesVal = savedRecord.notes[domainToCheck] || "";
+    const currentNotesVal = notes[domainToCheck] || "";
+    if (savedNotesVal.trim() !== currentNotesVal.trim()) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleDomainChangeAttempt = (nextDomain: string) => {
+    if (checkHasUnsavedChanges(activeDomain)) {
+      setPendingNextDomain(nextDomain);
+      setShowUnsavedConfirmDialog(true);
+    } else {
+      onChangeDomain(nextDomain);
+    }
+  };
+
+  const handleSaveAndContinue = () => {
+    if (onSaveStudent) {
+      onSaveStudent(profile.studentId || activeStudentId);
+    }
+    if (pendingNextDomain) {
+      onChangeDomain(pendingNextDomain);
+    }
+    setShowUnsavedConfirmDialog(false);
+    setPendingNextDomain(null);
+    showToastMsg(
+      lang === "en" 
+        ? "Progress saved automatically!" 
+        : "प्रगति स्वचालित रूप से सुरक्षित की गई!", 
+      "success"
+    );
+  };
+
+  const handleLeaveAnyway = () => {
+    if (pendingNextDomain) {
+      onChangeDomain(pendingNextDomain);
+    }
+    setShowUnsavedConfirmDialog(false);
+    setPendingNextDomain(null);
+  };
+
+  const handleCancelTransition = () => {
+    setShowUnsavedConfirmDialog(false);
+    setPendingNextDomain(null);
+  };
   
   const validateDomains = () => {
     const status: Record<string, boolean> = {};
@@ -531,6 +655,35 @@ export default function StudentProfileView({
             visibility: hidden !important;
           }
           
+          @page {
+            size: A4 portrait;
+            margin: 15mm 10mm 15mm 10mm;
+          }
+
+          .print-no-break {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          .print-footer {
+            position: fixed !important;
+            bottom: -5mm !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 10mm !important;
+            display: block !important;
+            visibility: visible !important;
+            text-align: center !important;
+            font-size: 8px !important;
+            font-weight: 800 !important;
+            color: #475569 !important;
+            border-top: 1px dashed #cbd5e1 !important;
+            padding-top: 3px !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            font-family: 'Inter', sans-serif !important;
+          }
+          
           body, html {
             background: white !important;
             color: black !important;
@@ -792,6 +945,25 @@ export default function StudentProfileView({
               {lang === "en" ? "Editing Profile ID" : "सक्रिय छात्र संपादन नंबर"}: <strong className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">{profile.studentId || activeStudentId}</strong>
             </span>
           </div>
+          {/* Educational District */}
+          <div className="flex flex-col gap-2 min-w-[200px]">
+            <label className="text-slate-600 font-semibold tracking-wide uppercase text-[10px] flex items-center gap-1.5 text-indigo-950 font-bold">
+              <span>📍 Educational District (जिला जिला)</span>
+            </label>
+            <select
+              value={profile.district || ""}
+              onChange={(e) => onUpdateProfile({ ...profile, district: e.target.value })}
+              className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl py-2.5 px-3 text-slate-900 font-extrabold focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-xs h-[41px]"
+            >
+              <option value="">{lang === "en" ? "-- Choose District --" : "-- जिला चुनें --"}</option>
+              {RAJASTHAN_DISTRICTS.map((dist) => (
+                <option key={dist.en} value={dist.en}>
+                  {dist.en} ({dist.hi})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Educational Block */}
           <div className="flex flex-col gap-2">
             <label className="text-slate-600 font-semibold tracking-wide uppercase text-[10px] flex items-center gap-1.5 text-indigo-950 font-bold">
@@ -802,20 +974,6 @@ export default function StudentProfileView({
               value={profile.block || ""}
               onChange={(e) => onUpdateProfile({ ...profile, block: e.target.value })}
               placeholder="e.g. Block Name"
-              className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl py-2.5 px-3 text-slate-900 font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-xs"
-            />
-          </div>
-
-          {/* Educational District */}
-          <div className="flex flex-col gap-2">
-            <label className="text-slate-600 font-semibold tracking-wide uppercase text-[10px] flex items-center gap-1.5 text-indigo-950 font-bold">
-              <span>📍 Educational District (जिला दर्ज करें)</span>
-            </label>
-            <input
-              type="text"
-              value={profile.district || ""}
-              onChange={(e) => onUpdateProfile({ ...profile, district: e.target.value })}
-              placeholder="e.g. District Name"
               className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl py-2.5 px-3 text-slate-900 font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-xs"
             />
           </div>
@@ -980,6 +1138,25 @@ export default function StudentProfileView({
             />
           </div>
 
+          {/* Educational District */}
+          <div className="flex flex-col gap-2">
+            <label className="text-slate-600 font-semibold tracking-wide uppercase text-[10px] flex items-center gap-1.5 text-indigo-950 font-bold">
+              <span>📍 Educational District (जिला जिला)</span>
+            </label>
+            <select
+              value={profile.district || ""}
+              onChange={(e) => onUpdateProfile({ ...profile, district: e.target.value })}
+              className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl py-2.5 px-3 text-slate-900 font-extrabold focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-xs h-[41px]"
+            >
+              <option value="">{lang === "en" ? "-- Choose District --" : "-- जिला चुनें --"}</option>
+              {RAJASTHAN_DISTRICTS.map((dist) => (
+                <option key={dist.en} value={dist.en}>
+                  {dist.en} ({dist.hi})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Educational Block */}
           <div className="flex flex-col gap-2">
             <label className="text-slate-600 font-semibold tracking-wide uppercase text-[10px] flex items-center gap-1.5 text-indigo-950 font-bold">
@@ -990,20 +1167,6 @@ export default function StudentProfileView({
               value={profile.block || ""}
               onChange={(e) => onUpdateProfile({ ...profile, block: e.target.value })}
               placeholder="e.g. Block Name"
-              className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl py-2.5 px-3 text-slate-900 font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-xs"
-            />
-          </div>
-
-          {/* Educational District */}
-          <div className="flex flex-col gap-2">
-            <label className="text-slate-600 font-semibold tracking-wide uppercase text-[10px] flex items-center gap-1.5 text-indigo-950 font-bold">
-              <span>📍 Educational District (जिला दर्ज करें)</span>
-            </label>
-            <input
-              type="text"
-              value={profile.district || ""}
-              onChange={(e) => onUpdateProfile({ ...profile, district: e.target.value })}
-              placeholder="e.g. District Name"
               className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl py-2.5 px-3 text-slate-900 font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-xs"
             />
           </div>
@@ -1106,7 +1269,7 @@ export default function StudentProfileView({
             </label>
             <select
               value={activeDomain}
-              onChange={(e) => onChangeDomain(e.target.value)}
+              onChange={(e) => handleDomainChangeAttempt(e.target.value)}
               className="w-full bg-white border-2 border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-950"
             >
               {activeDomainsList.map((tab, idx) => {
@@ -1124,7 +1287,7 @@ export default function StudentProfileView({
             <button
               onClick={() => {
                 if (currentIndex > 0) {
-                  onChangeDomain(activeDomainsList[currentIndex - 1]);
+                  handleDomainChangeAttempt(activeDomainsList[currentIndex - 1]);
                 } else {
                   setCurrentWizardStep(2);
                 }
@@ -1136,7 +1299,7 @@ export default function StudentProfileView({
             <button
               onClick={() => {
                 if (currentIndex < activeDomainsList.length - 1) {
-                  onChangeDomain(activeDomainsList[currentIndex + 1]);
+                  handleDomainChangeAttempt(activeDomainsList[currentIndex + 1]);
                 } else {
                   setCurrentWizardStep(4);
                 }
@@ -1156,22 +1319,29 @@ export default function StudentProfileView({
             <div className="text-[9px] text-slate-450 font-black uppercase tracking-wider mb-2 px-1 text-left">
               {lang === "en" ? "Diagnostic Ledger Sections" : "मूल्यांकन खंड प्रगति"}
             </div>
-            {activeDomainsList.map((tab, idx) => {
+             {activeDomainsList.map((tab, idx) => {
               const isActive = tab === activeDomain;
               const isCompleted = checklists[tab]?.some(item => item.checked === true);
               const stepNum = idx + 1;
+              const totalItems = checklists[tab]?.length || 0;
+              const checkedItems = checklists[tab]?.filter(item => item.checked === true).length || 0;
+              const pct = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
+              const r = 9;
+              const sw = 2;
+              const circ = 2 * Math.PI * r;
+              const offset = circ - (pct / 100) * circ;
               
               return (
                 <button
                   key={tab}
-                  onClick={() => onChangeDomain(tab)}
+                  onClick={() => handleDomainChangeAttempt(tab)}
                   className={`w-full text-left p-2.5 rounded-xl border-2 transition-all text-xs flex items-center justify-between gap-2.5 cursor-pointer ${
                     isActive 
                       ? "bg-indigo-600 text-white border-indigo-600 font-extrabold shadow" 
                       : "bg-white text-slate-700 border-slate-100 hover:text-indigo-600 hover:bg-slate-100/80"
                   }`}
                 >
-                  <div className="flex items-center gap-2 truncate">
+                  <div className="flex items-center gap-2 truncate flex-1 text-left">
                     <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-extrabold ${isActive ? "bg-indigo-700 text-white" : "bg-slate-200 text-slate-600"}`}>
                       {stepNum}
                     </span>
@@ -1179,9 +1349,40 @@ export default function StudentProfileView({
                       {tab.replace(/^\d+\.\s*/, "")}
                     </span>
                   </div>
-                  <span className={`text-[10px] font-black ${isCompleted ? (isActive ? "text-indigo-200" : "text-emerald-600") : "text-amber-500 animate-pulse"}`}>
-                    {isCompleted ? "✓" : "⚠️"}
-                  </span>
+                  
+                  {/* Circular Progress Ring with Checked Count inside */}
+                  <div className="relative flex items-center justify-center w-7 h-7 flex-shrink-0" title={`${checkedItems} of ${totalItems} checklist items selected`}>
+                    <svg className="w-7 h-7 -rotate-90">
+                      <circle
+                        cx="14"
+                        cy="14"
+                        r={r}
+                        className={`${isActive ? "stroke-indigo-800/60" : "stroke-slate-150"}`}
+                        strokeWidth={sw}
+                        fill="transparent"
+                      />
+                      <circle
+                        cx="14"
+                        cy="14"
+                        r={r}
+                        className={`${
+                          pct === 100
+                            ? (isActive ? "stroke-emerald-300" : "stroke-emerald-500")
+                            : pct > 0
+                              ? (isActive ? "stroke-white" : "stroke-indigo-600")
+                              : (isActive ? "stroke-indigo-100" : "stroke-amber-400")
+                        } transition-all duration-300`}
+                        strokeWidth={sw}
+                        strokeDasharray={circ}
+                        strokeDashoffset={offset}
+                        strokeLinecap="round"
+                        fill="transparent"
+                      />
+                    </svg>
+                    <span className={`absolute text-[8px] font-black ${isActive ? "text-white" : pct > 0 ? "text-indigo-950" : "text-amber-600 font-bold"}`}>
+                      {checkedItems}
+                    </span>
+                  </div>
                 </button>
               );
             })}
@@ -1205,7 +1406,7 @@ export default function StudentProfileView({
                 <button
                   onClick={() => {
                     if (currentIndex > 0) {
-                      onChangeDomain(activeDomainsList[currentIndex - 1]);
+                      handleDomainChangeAttempt(activeDomainsList[currentIndex - 1]);
                     } else {
                       setCurrentWizardStep(2);
                     }
@@ -1217,12 +1418,12 @@ export default function StudentProfileView({
                 <button
                   onClick={() => {
                     if (currentIndex < activeDomainsList.length - 1) {
-                      onChangeDomain(activeDomainsList[currentIndex + 1]);
+                      handleDomainChangeAttempt(activeDomainsList[currentIndex + 1]);
                     } else {
                       setCurrentWizardStep(4);
                     }
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-750 text-white text-xs font-extrabold shadow cursor-pointer transition-all border-b-2 border-indigo-850 active:translate-y-[1px]"
+                  className="px-3.5 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-755 text-white text-xs font-extrabold shadow cursor-pointer transition-all border-b-2 border-indigo-850 active:translate-y-[1px]"
                 >
                   {currentIndex === activeDomainsList.length - 1 ? (lang === "en" ? "To Timeline (Step 4)" : "आगे (चरण ४)") : (lang === "en" ? "Next Section" : "अगला खंड")} →
                 </button>
@@ -1776,17 +1977,11 @@ export default function StudentProfileView({
               >
                 INDIVIDUALIZED EDUCATION PROGRAM (IEP) EVALUATION TRANSCRIPT
               </h2>
-              <p 
-                className="text-[10px] text-indigo-650 font-bold uppercase tracking-wider font-sans"
-                style={{ color: '#4f46e5' }}
-              >
-                Developed by C.S. GAUTAM
-              </p>
             </div>
 
             {/* Profile Grid */}
             <div 
-              className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-xs text-left font-sans"
+              className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-xs text-left font-sans print-no-break"
               style={{ 
                 backgroundColor: '#f8fafc', 
                 borderColor: '#e2e8f0',
@@ -1872,7 +2067,7 @@ export default function StudentProfileView({
 
             {/* IEP Objective */}
             <div 
-              className="border border-slate-200 rounded-xl p-5 bg-white text-left font-sans"
+              className="border border-slate-200 rounded-xl p-5 bg-white text-left font-sans print-no-break"
               style={{ borderColor: '#e2e8f0', backgroundColor: '#ffffff' }}
             >
               <h3 
@@ -1906,7 +2101,7 @@ export default function StudentProfileView({
                 return (
                   <div 
                     key={domainName} 
-                    className="border border-slate-200 rounded-xl p-4 flex flex-col gap-3 bg-slate-50/40 text-left font-sans"
+                    className="border border-slate-200 rounded-xl p-4 flex flex-col gap-3 bg-slate-50/40 text-left font-sans print-no-break"
                     style={{ borderColor: '#e2e8f0', backgroundColor: 'rgba(248, 250, 252, 0.4)' }}
                   >
                     <div 
@@ -1967,7 +2162,7 @@ export default function StudentProfileView({
 
             {/* Progress Review */}
             <div 
-              className="border border-slate-200 rounded-xl p-4 bg-white flex justify-between items-center gap-6 mt-1.5 text-left font-sans"
+              className="border border-slate-200 rounded-xl p-4 bg-white flex justify-between items-center gap-6 mt-1.5 text-left font-sans print-no-break"
               style={{ borderColor: '#e2e8f0', backgroundColor: '#ffffff' }}
             >
               <div>
@@ -1983,7 +2178,7 @@ export default function StudentProfileView({
 
             {/* Stamp Footer Layout */}
             <div 
-              className="grid grid-cols-3 gap-6 pt-12 border-t border-dashed border-slate-300 text-[9px] font-bold uppercase text-slate-400 text-center mt-6 font-sans"
+              className="grid grid-cols-3 gap-6 pt-12 border-t border-dashed border-slate-300 text-[9px] font-bold uppercase text-slate-400 text-center mt-6 font-sans print-no-break"
               style={{ borderTopColor: '#cbd5e1', color: '#94a3b8' }}
             >
               <div className="flex flex-col gap-10 font-sans">
@@ -2009,14 +2204,80 @@ export default function StudentProfileView({
 
             {/* Developed credits footnote label */}
             <div 
-              className="text-center text-[9px] text-slate-400 font-black tracking-widest uppercase pt-6 mt-4 border-t font-sans"
+              className="text-center text-[9px] text-slate-400 font-black tracking-widest uppercase pt-6 mt-4 border-t font-sans print-no-break"
               style={{ borderTopColor: '#cbd5e1', color: '#94a3b8' }}
             >
               Developed by CS Gautam special teacher CBEO office Pahadi | IEP India Educational Matrix Framework • 2026
             </div>
+
+            {/* Custom Fixed Footer repeating on every printed A4 page */}
+            <div 
+              className="hidden print:block print-footer"
+              style={{ 
+                position: 'fixed', 
+                bottom: '-5mm', 
+                left: '0', 
+                right: '0', 
+                fontSize: '8px', 
+                fontWeight: 800, 
+                color: '#475569', 
+                borderTop: '1px dashed #cbd5e1', 
+                paddingTop: '3px',
+                textAlign: 'center',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                fontFamily: 'Inter, sans-serif'
+              }}
+            >
+              Developed by CS Gautam special teacher CBEO office Pahadi | IEP India Protocol
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Unsaved Changes Warning Modal */}
+      {showUnsavedConfirmDialog && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full border-2 border-indigo-100 shadow-2xl p-6 text-left animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-amber-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-black text-indigo-950 uppercase tracking-tight">
+                  {lang === "en" ? "Unsaved Changes Detected" : "असुरक्षित परिवर्तन मिले हैं"}
+                </h3>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed mt-2">
+                  {lang === "en" 
+                    ? "You have unsaved selections or observations in the current section. If you leave this section without saving, these updates won't be committed to the active record." 
+                    : "आपके पास वर्तमान मूल्यांकन खंड में कुछ असुरक्षित विवरण या परिवर्तन हैं। यदि आप इन्हें सुरक्षित किए बिना छोड़ते हैं, तो ये बदलाव सक्रिय रिकॉर्ड में सहेजे नहीं जाएंगे।"}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-2 mt-6 sm:justify-end">
+              <button
+                onClick={handleCancelTransition}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer"
+              >
+                {lang === "en" ? "Stay on Section" : "इसी खंड पर रहें"}
+              </button>
+              <button
+                onClick={handleLeaveAnyway}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border-2 border-amber-100 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold cursor-pointer"
+              >
+                {lang === "en" ? "Leave & Discard" : "छोड़ें और रद्द करें"}
+              </button>
+              <button
+                onClick={handleSaveAndContinue}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-black shadow border-b-2 border-indigo-800 cursor-pointer"
+              >
+                {lang === "en" ? "Save & Continue" : "सहेजें और आगे बढ़ें"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
