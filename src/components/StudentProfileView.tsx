@@ -783,6 +783,152 @@ export default function StudentProfileView({
       {/* STANDARD EDITING WORKSPACE WRAPPER */}
       <div className={isPrintPreviewActive ? "hidden" : "w-full flex flex-col gap-8 print-hidden"}>
 
+        {!profile.studentId || profile.studentId.trim() === "" ? (
+          <div className="max-w-2xl w-full mx-auto bg-white border-2 border-indigo-150 rounded-3xl shadow-2xl overflow-hidden mt-8 animate-in fade-in zoom-in-95 duration-200">
+            {/* Top decorative gradient bar */}
+            <div className="h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-800" />
+            
+            <div className="p-8 md:p-10 text-left">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 bg-indigo-50 border border-indigo-150 rounded-2xl text-indigo-700">
+                  <User className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-indigo-950 uppercase tracking-tight">
+                    {lang === "en" ? "Student Evaluation Entry" : "दिव्यांग विवरण पत्रक - मूल्यांकन एवं पंजीकरण"}
+                  </h2>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5 font-mono">
+                    {lang === "en" ? "IEP India Educational Grid Protocol" : "विशेष छात्र आई.ई.पी. मूल्यांकन भारत"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 bg-amber-50 rounded-2xl border border-amber-200 text-slate-800 mb-8">
+                <span className="text-sm font-black text-amber-800 block uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                  ⚠️ {lang === "en" ? "Student ID/Roll Number Required" : "मूल्यांकन हेतु बच्चे का रोल नंबर/नंबर दर्ज करें"}
+                </span>
+                <p className="text-xs leading-relaxed font-semibold uppercase text-slate-600">
+                  {lang === "en" 
+                    ? "Before filling any assessment checklists or teacher observations, please assign or enter a child number/roll number below." 
+                    : "आई.ई.पी. प्रपत्र भरने या कोई मूल्यांकन शुरू करने से पहले, आपको बच्चे का नंबर या रोल नंबर दर्ज करना होगा। इसके बाद ही प्रक्रिया का बाकी विकल्प खुलेगा।"}
+                </p>
+              </div>
+
+              {/* Form Input fields */}
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-2">
+                  <label className="text-slate-600 font-extrabold tracking-wide uppercase text-[10px] flex items-center gap-1.5 text-indigo-950">
+                    <span>👤 {lang === "en" ? "Child Registration / Roll Number (Required)" : "बच्चे का नंबर / रोल नंबर (अनिवार्य)"}</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="init-child-number"
+                    placeholder={lang === "en" ? "e.g. 1001, 1002, CB_15" : "जैसे की 1001, 1002, CB_15..."}
+                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl py-3 px-4 text-slate-900 font-bold placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-xs"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const btn = document.getElementById("btn-start-eval");
+                        if (btn) btn.click();
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 font-sans text-left">
+                  <label className="text-slate-650 font-extrabold tracking-wide uppercase text-[10px] flex items-center gap-1.5 text-slate-500">
+                    <span>✏️ {lang === "en" ? "Student Full Name (Optional)" : "छात्र का नाम (वैकल्पिक)"}</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="init-child-name"
+                    placeholder={lang === "en" ? "Enter student name" : "बच्चे का नाम दर्ज करें"}
+                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl py-3 px-4 text-slate-900 font-semibold placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-xs"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const btn = document.getElementById("btn-start-eval");
+                        if (btn) btn.click();
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Start Evaluator Action Button */}
+              <button
+                id="btn-start-eval"
+                onClick={() => {
+                  const numInput = document.getElementById("init-child-number") as HTMLInputElement;
+                  const nameInput = document.getElementById("init-child-name") as HTMLInputElement;
+                  const rollNo = numInput?.value?.trim();
+                  const name = nameInput?.value?.trim();
+                  
+                  if (!rollNo) {
+                    showToastMsg(
+                      lang === "en" 
+                        ? "Please enter a valid Student ID / Child Number first!" 
+                        : "कृपया आगे बढ़ने से पहले बच्चे का नंबर (Roll Number) अवश्य दर्ज करें!", 
+                      "info"
+                    );
+                    return;
+                  }
+
+                  // Check if this student already exists in local storage list!
+                  const exists = studentsList.find(s => s.id === rollNo);
+                  if (exists) {
+                    onLoadStudent(rollNo);
+                    showToastMsg(
+                      lang === "en" 
+                        ? `Loaded existing diagnostic profile for ID ${rollNo}.` 
+                        : `बच्चे का नंबर ${rollNo} का पूर्व रिकॉर्ड मिल गया है। विवरण सफलता से लोड किया गया।`, 
+                      "success"
+                    );
+                  } else {
+                    // Create new student record with specified id and name
+                    onCreateNewStudent(rollNo, name || (lang === "en" ? "New Student" : "नया छात्र"));
+                    showToastMsg(
+                      lang === "en" 
+                        ? `Evaluation registry activated for Student ID ${rollNo}.` 
+                        : `नया मूल्यांकन सत्र छात्र नंबर ${rollNo} के लिए प्रारंभ किया गया है!`, 
+                      "success"
+                    );
+                  }
+                }}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-3.5 rounded-2xl mt-6 transition-all shadow border-b-4 border-indigo-850 active:translate-y-[2px] cursor-pointer"
+              >
+                <span>➡️ {lang === "en" ? "Begin Evaluation Process" : "प्रक्रिया शुरू करें (Begin Evaluation)"}</span>
+              </button>
+
+              {/* List of existing records for easy reload! */}
+              {studentsList.length > 0 && (
+                <div className="mt-8 pt-6 border-t border-slate-100 text-left">
+                  <h4 className="text-[10px] uppercase font-black tracking-widest text-slate-400 mb-3 block">
+                    {lang === "en" ? "Or reload from active records" : "या निम्नलिखित पहले से पंजीकृत बच्चों के डेटा को लोड करें:"}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                    {studentsList.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          onLoadStudent(s.id);
+                        }}
+                        className="p-3 bg-slate-50 border border-slate-150 rounded-xl hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-xs text-left cursor-pointer flex items-center justify-between gap-2"
+                      >
+                        <div className="truncate shrink-0 font-bold text-slate-800">
+                          {s.profile.studentName || s.id}
+                        </div>
+                        <div className="font-mono text-[9px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 font-semibold shrink-0">
+                          ID: {s.id}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+
       {/* HEADER SECTION WITH TITLE & PRINT / DOWNLOAD AUTOMATIC */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-indigo-100 p-6 rounded-2xl shadow-sm print:hidden">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
@@ -819,6 +965,32 @@ export default function StudentProfileView({
 
         <div className="flex flex-wrap items-center gap-2.5 self-stretch lg:self-auto justify-end">
           <button
+            onClick={() => {
+              onUpdateProfile({
+                studentId: "",
+                schoolName: "",
+                studentName: "",
+                className: "c1",
+                disabilityType: "1",
+                disabilityCertificate: false,
+                generalTeacher: "",
+                specialTeacher: "",
+                dateOfBirth: "",
+                block: "",
+                district: "",
+                learningOutcomeCycle: "6monthly"
+              });
+              showToastMsg(
+                lang === "en" ? "Evaluating new student record..." : "नए छात्र के मूल्यांकन के लिए फॉर्म रिसेट किया गया...",
+                "info"
+              );
+            }}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-3 rounded-xl border border-slate-300 transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <span>✨ {lang === "en" ? "New Student Entry" : "नया छात्र प्रविष्टि"}</span>
+          </button>
+
+          <button
             onClick={() => setIsPrintPreviewActive(true)}
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2 border-b-4 border-indigo-800 active:translate-y-[2px] active:border-b-2"
           >
@@ -826,14 +998,13 @@ export default function StudentProfileView({
             <span>{lang === "en" ? "Print Preview" : "प्रिंट प्रीव्यू"}</span>
           </button>
 
-          {/* Active Save Action represent "Save data to local registry and download updated CSV" */}
           {onSaveStudent && (
             <button
               onClick={() => onSaveStudent()}
               className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold px-5 py-3 rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2 border-b-4 border-amber-800 active:translate-y-[2px] active:border-b-2"
             >
               <FileCheck className="w-4.5 h-4.5 text-amber-100" />
-              <span>{lang === "en" ? "Save & VLookup Update" : "डेटा सुरक्षित करें (Save)"}</span>
+              <span>{lang === "en" ? "Save IEP Progress" : "डेटा सुरक्षित करें (Save)"}</span>
             </button>
           )}
         </div>
@@ -1910,6 +2081,8 @@ export default function StudentProfileView({
     </>
   )}
 
+          </>
+        )}
       </div>
 
       {/* HIGH RESOLUTION OFFICIAL TRANSCRIPT TEMPLATE - VISIBLE IN PRINT PREVIEW, HIDDEN NORMALLY */}
@@ -2233,7 +2406,6 @@ export default function StudentProfileView({
             </div>
           </div>
         </div>
-      </div>
 
       {/* Unsaved Changes Warning Modal */}
       {showUnsavedConfirmDialog && (

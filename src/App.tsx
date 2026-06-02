@@ -298,7 +298,7 @@ export default function App() {
   };
 
   // Manual save handler for student records (with optional custom ID)
-  const handleManualSaveStudent = (customId?: string) => {
+  const handleManualSaveStudent = (customId?: string, downloadCsv: boolean = false) => {
     const sId = customId || profile.studentId || activeStudentId;
     if (!sId || sId.trim() === "" || sId.trim() === "1001" && profile.studentName === "") {
       showToastMsg(
@@ -339,8 +339,17 @@ export default function App() {
       return newList;
     });
 
-    // Generate and push CSV update download immediately for VLOOKUP matches
-    triggerCSVDownload(cleanedId, updatedProfile, updatedList);
+    if (downloadCsv) {
+      // Generate and push CSV update download immediately for VLOOKUP matches
+      triggerCSVDownload(cleanedId, updatedProfile, updatedList);
+    } else {
+      showToastMsg(
+        lang === "en" 
+          ? "Student record saved and database synced successfully!" 
+          : "छात्र का रिकॉर्ड सुरक्षित कर लिया गया है और डेटा सिंक हो गया है!",
+        "success"
+      );
+    }
   };
 
   const triggerCSVDownload = (currentId: string, currentProfile: StudentProfile, list: StudentRecord[]) => {
@@ -649,6 +658,7 @@ export default function App() {
                 onUpdateGoogleSheetUrl={setGoogleSheetUrl}
                 isSyncingSheet={isSyncingSheet}
                 onQueryGoogleSheet={handleQueryGoogleSheet}
+                onDownloadCSV={() => handleManualSaveStudent(undefined, true)}
               />
             )}
           </div>

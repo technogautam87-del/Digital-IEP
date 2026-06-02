@@ -41,6 +41,7 @@ interface AdminPanelViewProps {
   onUpdateGoogleSheetUrl: (url: string) => void;
   isSyncingSheet: boolean;
   onQueryGoogleSheet: (targetId?: string) => void;
+  onDownloadCSV?: () => void;
 }
 
 export default function AdminPanelView({ 
@@ -60,7 +61,8 @@ export default function AdminPanelView({
   googleSheetUrl,
   onUpdateGoogleSheetUrl,
   isSyncingSheet,
-  onQueryGoogleSheet
+  onQueryGoogleSheet,
+  onDownloadCSV
 }: AdminPanelViewProps) {
   
   const t = translationMap[lang];
@@ -902,28 +904,40 @@ export default function AdminPanelView({
             )}
           </div>
 
-          {/* SEC 6: Board Reporting Spreadsheet (Export Excel) */}
-          <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
+          {/* SEC 6: Board Reporting Spreadsheet (Export Excel & CSV) */}
+          <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm text-left flex flex-col gap-3">
+            <div className="flex items-center gap-2 pb-1.5 border-b border-indigo-50">
               <FileSpreadsheet className="w-4.5 h-4.5 text-indigo-600 animate-pulse" />
               <h2 className="text-xs uppercase tracking-wider text-indigo-950 font-extrabold">
-                {lang === "en" ? "Export to Excel" : "एक्सेल में एक्सपोर्ट करें"}
+                {lang === "en" ? "Data Backups & Export Registry" : "डेटा बैकअप एवं सुव्यवस्थित एक्सपोर्ट विकल्प"}
               </h2>
             </div>
             
-            <p className="text-[10px] text-slate-500 font-semibold mb-4 leading-relaxed uppercase">
+            <p className="text-[10px] text-slate-500 font-semibold mb-2 leading-relaxed uppercase">
               {lang === "en" 
-                ? "Download comprehensive student IEP data, checklists, and qualitative progress reports as a structured multi-sheet Excel workbook for official board auditing & compliance." 
-                : "आधिकारिक बोर्ड ऑडिटिंग और अनुपालन के लिए छात्र के व्यापक आईईपी डेटा, चेकलिस्ट और प्रगति टिप्पणियों को मल्टी-शीट एक्सेल वर्कबुक पर डाउनलोड करें।"}
+                ? "Download student diagnostic milestones, qualitative notes, and IEP registers for official compliance guidelines or external syncing." 
+                : "छात्रों के संचित डेटा को एक्सेल (.xlsx) या सुसंगत सीएसवी (.csv) फ़ाइल के रूप में सुरक्षित रूप से डाउनलोड करें।"}
             </p>
 
-            <button
-              onClick={handleExportToExcel}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-all cursor-pointer shadow border-b-2 border-emerald-800 flex items-center justify-center gap-2 font-sans"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>{lang === "en" ? "Generate Board Report (.xlsx)" : "बोर्ड रिपोर्ट (.xlsx) जेनरेट करें"}</span>
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={handleExportToExcel}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all cursor-pointer shadow border-b-2 border-emerald-800 flex items-center justify-center gap-1.5 font-sans"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>{lang === "en" ? "Export Excel (.xlsx)" : "एक्सेल रिपोर्ट (.xlsx)"}</span>
+              </button>
+
+              {onDownloadCSV && (
+                <button
+                  onClick={onDownloadCSV}
+                  className="bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all cursor-pointer shadow border-b-2 border-sky-800 flex items-center justify-center gap-1.5 font-sans"
+                >
+                  <Database className="w-4 h-4 text-sky-100" />
+                  <span>{lang === "en" ? "Download CSV (.csv)" : "डेटाबेस सीएसवी (.csv)"}</span>
+                </button>
+              )}
+            </div>
           </div>
           
         </div>
