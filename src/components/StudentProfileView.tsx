@@ -1086,6 +1086,7 @@ export default function StudentProfileView({
               ? "Search for child profiles using their unique assigned identification number or roll number to reload their complete diagnostic IEP records."
               : "प्रत्येक बच्चे के आवंटित नंबर/रोल नंबर से खोजें। सर्च करने पर उस बच्चे की चेकलिस्ट, स्पेशल शिक्षक टिप्पणियाँ और वार्षिक लक्ष्य पूरी तरह बदल जाएँगे।"}
           </p>
+        </div>
 
           {/* Live Search Form */}
           <div className="flex gap-2.5 mb-4">
@@ -1107,7 +1108,6 @@ export default function StudentProfileView({
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
-        </div>
 
         <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
           <div className="text-[11px] text-indigo-950 font-bold flex items-center gap-1.5">
@@ -2406,6 +2406,7 @@ export default function StudentProfileView({
             </div>
           </div>
         </div>
+      </div>
 
       {/* Unsaved Changes Warning Modal */}
       {showUnsavedConfirmDialog && (

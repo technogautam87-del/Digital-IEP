@@ -42,6 +42,15 @@ interface AdminPanelViewProps {
   isSyncingSheet: boolean;
   onQueryGoogleSheet: (targetId?: string) => void;
   onDownloadCSV?: () => void;
+  gUser?: any;
+  gToken?: any;
+  driveSpreadsheets?: any[];
+  selectedDriveSpreadsheetId?: string;
+  onSelectDriveSpreadsheetId?: (id: string) => void;
+  onGoogleLogin?: () => void;
+  onGoogleLogout?: () => void;
+  onWriteStudentToGoogleSheet?: (id?: string) => void;
+  isLoadingSpreadsheets?: boolean;
 }
 
 export default function AdminPanelView({ 
@@ -62,7 +71,16 @@ export default function AdminPanelView({
   onUpdateGoogleSheetUrl,
   isSyncingSheet,
   onQueryGoogleSheet,
-  onDownloadCSV
+  onDownloadCSV,
+  gUser,
+  gToken,
+  driveSpreadsheets = [],
+  selectedDriveSpreadsheetId = "",
+  onSelectDriveSpreadsheetId,
+  onGoogleLogin,
+  onGoogleLogout,
+  onWriteStudentToGoogleSheet,
+  isLoadingSpreadsheets = false
 }: AdminPanelViewProps) {
   
   const t = translationMap[lang];
@@ -745,67 +763,106 @@ export default function AdminPanelView({
 
             </div>
           </div>
-
-          {/* SEC 4: Emblem Seals Upload simulation */}
-          <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <Upload className="w-4.5 h-4.5 text-indigo-600" />
-              <h2 className="text-xs uppercase tracking-wider text-indigo-950 font-extrabold">{t.emblemLabel}</h2>
-            </div>
-            
-            <div className="border-2 border-dashed border-indigo-200 rounded-2xl p-6 flex flex-col items-center justify-center text-center bg-indigo-50/20">
-              {logoPreview ? (
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-indigo-300 p-1 bg-white shadow-md">
-                    <img src={logoPreview} alt="Emblem" className="w-full h-full object-contain" />
-                  </div>
-                  <button
-                    onClick={handleRemoveLogo}
-                    className="text-xs text-rose-500 font-extrabold uppercase hover:underline cursor-pointer"
-                  >
-                    Delete logo
-                  </button>
-                </div>
-              ) : (
-                <label className="cursor-pointer group">
-                  <div className="w-12 h-12 bg-indigo-100 hover:bg-indigo-200 rounded-full flex items-center justify-center text-indigo-600 mx-auto mb-3 shadow transition-all">
-                    <Upload className="w-5 h-5" />
-                  </div>
-                  <span className="block text-xs text-slate-600 font-bold mb-1">{t.emblemLabel}</span>
-                  <span className="block text-[9px] text-slate-400 uppercase font-black tracking-wide">{t.emblemDesc}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    className="hidden"
-                  />
-                </label>
-              )}
-            </div>
-          </div>
-
-          {/* SEC 5: Cloud spreadsheet map synchronization */}
           <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-600 animate-pulse" />
-                <h2 className="text-xs uppercase tracking-wider text-indigo-950 font-extrabold font-sans">
-                  {lang === "en" ? "Google Sheets VLOOKUP Integration" : "गूगल शीट और वी-लुकअप क्लाउड एकीकरण"}
-                </h2>
+              <div className="flex items-center gap-2 mb-3 justify-between">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-600 animate-pulse" />
+                  <h2 className="text-xs uppercase tracking-wider text-indigo-950 font-extrabold font-sans">
+                    {lang === "en" ? "Google Workspace Cloud Integration" : "गूगल वर्कस्पेस क्लाउड एकीकरण"}
+                  </h2>
+                </div>
+                {gUser && (
+                  <span className="p-1 px-2.5 bg-emerald-100 text-emerald-800 font-extrabold text-[8px] uppercase tracking-widest rounded-full border border-emerald-300">
+                    Connected
+                  </span>
+                )}
               </div>
               
               <p className="text-[10px] text-slate-500 font-semibold mb-4 leading-relaxed uppercase">
                 {lang === "en" 
-                  ? "Link any online Google Sheet Roster. Searching numbers inside individual dashboard queries acts as a direct VLOOKUP pulling records from your cloud sheet!"
-                  : "आप अपने गूगल शीट लिंक को यहाँ जोड़ सकते हैं। जब भी कोई उस नंबर से सर्च करेगा, यह डैशबोर्ड सीधे आपके गूगल शीट से रिकॉर्ड उठाकर डिटेल्स खोल देगा।"}
+                  ? "Connect your Google account to read student rosters in real-time from your Google Sheet, and sync details back directly to your Sheets!"
+                  : "सुरक्षित रूप से अपनी गूगल ड्राइव से शीट चुनने, रियल-टाइम छात्र डेटा सिंक करने, तथा शीट में सीधे सेव करने के लिए गूगल खाता जोड़ें।"}
               </p>
+
+              {/* Secure Google authentication section */}
+              <div className="mb-4">
+                {!gUser ? (
+                  <button
+                    onClick={onGoogleLogin}
+                    className="w-full flex items-center justify-center gap-2.5 bg-white hover:bg-slate-55 text-slate-700 font-extrabold py-2.5 px-4 rounded-xl border-2 border-slate-200 hover:border-slate-350 transition-all cursor-pointer shadow-sm active:translate-y-[1px]"
+                  >
+                    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-4 h-4">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                    </svg>
+                    <span className="text-xs">{lang === "en" ? "Sign in with Google Workspace" : "गूगल वर्कस्पेस से साइन-इन करें"}</span>
+                  </button>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {gUser.photoURL ? (
+                          <img src={gUser.photoURL} alt={gUser.displayName} referrerPolicy="no-referrer" className="w-6 h-6 rounded-full" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-705 flex items-center justify-center text-[10px] font-bold">
+                            {gUser.email?.[0]?.toUpperCase()}
+                          </div>
+                        )}
+                        <div className="text-left">
+                          <p className="text-[11px] font-bold text-slate-800 leading-none">{gUser.displayName || gUser.email}</p>
+                          <p className="text-[9px] text-slate-400 font-bold leading-tight uppercase mt-0.5">{gUser.email}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={onGoogleLogout}
+                        className="text-rose-600 hover:text-rose-800 text-[10px] font-black uppercase hover:underline cursor-pointer"
+                      >
+                        {lang === "en" ? "Sign Out" : "साइन आउट"}
+                      </button>
+                    </div>
+
+                    {/* Drive Selector */}
+                    <div className="mt-3 pt-3 border-t border-slate-205">
+                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-400 mb-10">
+                        {lang === "en" ? "Select Google Sheets from your Drive" : "गूगल ड्राइव से शीट का चयन करें"}
+                      </label>
+                      {isLoadingSpreadsheets ? (
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 py-1 font-bold">
+                          <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+                          <span>{lang === "en" ? "Listing spreadsheets from Drive..." : "गूगल ड्राइव से शीट लोड हो रही हैं..."}</span>
+                        </div>
+                      ) : driveSpreadsheets.length === 0 ? (
+                        <p className="text-[10px] text-amber-600 font-semibold py-1">
+                          ⚠️ {lang === "en" ? "No spreadsheets found in your Google Drive." : "आपकी गूगल ड्राइव में कोई शीट नहीं मिली।"}
+                        </p>
+                      ) : (
+                        <select
+                          value={selectedDriveSpreadsheetId}
+                          onChange={(e) => onSelectDriveSpreadsheetId?.(e.target.value)}
+                          className="w-full bg-white border-2 border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-800 text-left focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="">{lang === "en" ? "-- Choose Spreadsheet --" : "-- स्प्रेडशीट चुनें --"}</option>
+                          {driveSpreadsheets.map((sheet: any) => (
+                            <option key={sheet.id} value={sheet.id}>
+                              {sheet.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="flex flex-col gap-2.5 mb-4">
                 <input
                   type="text"
                   value={googleSheetUrl}
                   onChange={(e) => onUpdateGoogleSheetUrl(e.target.value)}
-                  placeholder={lang === "en" ? "Paste Google Sheet url..." : "यहाँ कॉपी की हुई गूगल शीट का URL डालें..."}
+                  placeholder={lang === "en" ? "Paste Google Sheet url or ID..." : "यहाँ कॉपी की हुई गूगल शीट का URL या ID डालें..."}
                   className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-850 focus:outline-none focus:border-emerald-500 placeholder-slate-400 font-sans"
                 />
                 
@@ -831,10 +888,21 @@ export default function AdminPanelView({
                     <span>{showSyncInstructions ? (lang === "en" ? "Hide Guide" : "विवरण छिपाएं") : (lang === "en" ? "VLOOKUP Help" : "VLOOKUP कैसे बनाएं")}</span>
                   </button>
                 </div>
+
+                {gUser && (
+                  <button
+                    onClick={() => onWriteStudentToGoogleSheet?.()}
+                    disabled={isSyncingSheet}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-350 text-white text-xs font-extrabold py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 border-b-2 border-indigo-800 cursor-pointer mt-1"
+                  >
+                    <span>☁️</span>
+                    <span>{lang === "en" ? "Save/Sync Active Student to Cloud Sheet" : "सक्रिय छात्र को सीधे गूगल शीट में सिंक करें"}</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="p-3 bg-emerald-50/50 border border-emerald-200 rounded-xl text-[10px] text-emerald-800 font-semibold flex items-center justify-between flex-wrap gap-2">
+            <div className="p-3 bg-emerald-55/50 border border-emerald-200 rounded-xl text-[10px] text-emerald-800 font-bold flex items-center justify-between flex-wrap gap-2 mb-3">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
                 <span>{lang === "en" ? "Automated Sync Ready" : "स्वधारण गूगल शीट एकीकरण सक्रिय"}</span>

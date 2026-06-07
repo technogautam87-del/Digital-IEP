@@ -14,15 +14,23 @@ import {
   Trash2,
   Plus,
   PieChart,
-  Loader2
+  Loader2,
+  FileSpreadsheet,
+  Volume2,
+  Compass
 } from "lucide-react";
 import { StudentProfile, Checklists, EducatorNotes, DomainType, Preferences, StudentRecord } from "./types";
 import PinLockOverlay from "./components/PinLockOverlay";
 import StudentProfileView from "./components/StudentProfileView";
 import AdminPanelView from "./components/AdminPanelView";
 import VisualizationDashboard from "./components/VisualizationDashboard";
+import BasicMrAssessmentView from "./components/BasicMrAssessmentView";
+import HearingImpairmentView from "./components/HearingImpairmentView";
+import NationalInstitutesHubView from "./components/NationalInstitutesHubView";
 import { LanguageType, CLASSES_LIST, DISABILITIES_LIST, translationMap, getRoman } from "./language";
 import { getDefaultChecklists, getDefaultNotes, IEP_SECTIONS_22 } from "./defaultData";
+import { googleSignIn, logout, initAuth } from "./firebaseAuth";
+import { User as FirebaseUser } from "firebase/auth";
 
 export default function App() {
   
@@ -35,7 +43,7 @@ export default function App() {
   const t = translationMap[lang];
 
   // Navigation Tabs Routing
-  const [activeTab, setActiveTab ] = useState<"Dashboard" | "Live Dashboard" | "Admin Panel">("Dashboard");
+  const [activeTab, setActiveTab ] = useState<"Dashboard" | "Live Dashboard" | "BASIC-MR Tool" | "Hearing Impairment Tool" | "National Institutes Hub" | "Admin Panel">("Dashboard");
   const [unlocked, setUnlocked] = useState<boolean>(() => {
     return localStorage.getItem("iep_admin_unlocked") === "true";
   });
@@ -163,65 +171,220 @@ export default function App() {
     );
   };
 
-  // Google Sheets integration state pushed to root
+  // Google Workspace Cloud Integration & OAuth State
   const [googleSheetUrl, setGoogleSheetUrl] = useState(() => {
     return localStorage.getItem("iep_connected_sheet_url") || "";
   });
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
+  const [gUser, setGUser] = useState<any>(null);
+  const [gToken, setGToken] = useState<string | null>(null);
+  const [driveSpreadsheets, setDriveSpreadsheets] = useState<any[]>([]);
+  const [selectedDriveSpreadsheetId, setSelectedDriveSpreadsheetId] = useState<string>("");
+  const [isLoadingSpreadsheets, setIsLoadingSpreadsheets] = useState(false);
+
+  // Initialize Firebase Auth & register user state listener
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, token) => {
+        setGUser(user);
+        setGToken(token);
+      },
+      () => {
+        setGUser(null);
+        setGToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch spreadsheets from user's Google Drive when logged in
+  const fetchDriveSpreadsheets = async (tokenString: string) => {
+    setIsLoadingSpreadsheets(true);
+    try {
+      const query = encodeURIComponent("mimeType='application/vnd.google-apps.spreadsheet'");
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,webViewLink)`, {
+        headers: { Authorization: `Bearer ${tokenString}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const filesList = data.files || [];
+        setDriveSpreadsheets(filesList);
+        
+        // If there's an existing mapped URL or sheet ID, auto-select it under the hood
+        if (googleSheetUrl && filesList.length > 0) {
+          let foundId = "";
+          if (googleSheetUrl.includes("docs.google.com/spreadsheets")) {
+            const match = googleSheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if (match && match[1]) foundId = match[1];
+          } else {
+            foundId = googleSheetUrl.trim();
+          }
+          if (foundId && filesList.some((s: any) => s.id === foundId)) {
+            setSelectedDriveSpreadsheetId(foundId);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error listing files from Drive:", e);
+    } finally {
+      setIsLoadingSpreadsheets(false);
+    }
+  };
+
+  useEffect(() => {
+    if (gToken) {
+      fetchDriveSpreadsheets(gToken);
+    } else {
+      setDriveSpreadsheets([]);
+      setSelectedDriveSpreadsheetId("");
+    }
+  }, [gToken]);
+
+  // Handle auto-population and synchronization if spreadsheet selector is changed
+  useEffect(() => {
+    if (selectedDriveSpreadsheetId) {
+      const selectedObj = driveSpreadsheets.find(s => s.id === selectedDriveSpreadsheetId);
+      if (selectedObj) {
+        const url = `https://docs.google.com/spreadsheets/d/${selectedDriveSpreadsheetId}/edit`;
+        setGoogleSheetUrl(url);
+        localStorage.setItem("iep_connected_sheet_url", url);
+      }
+    }
+  }, [selectedDriveSpreadsheetId, driveSpreadsheets]);
+
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await googleSignIn();
+      if (result) {
+        setGUser(result.user);
+        setGToken(result.accessToken);
+        showToastMsg(
+          lang === "en" 
+            ? `Signed in safely as ${result.user.displayName || result.user.email}!` 
+            : `गूगल खाते से सफलतापूर्वक लिंक किया गया: ${result.user.displayName || result.user.email}!`, 
+          "success"
+        );
+      }
+    } catch (err: any) {
+      console.error("Google Sign-in/OAuth error:", err);
+      showToastMsg(
+        lang === "en" ? `OAuth Connection Failed: ${err.message}` : `संबंध स्थापित करने में त्रुटि: ${err.message}`, 
+        "info"
+      );
+    }
+  };
+
+  const handleGoogleLogout = async () => {
+    try {
+      await logout();
+      setGUser(null);
+      setGToken(null);
+      setDriveSpreadsheets([]);
+      setSelectedDriveSpreadsheetId("");
+      showToastMsg(
+        lang === "en" ? "Google account unlinked successfully." : "गूगल खाते से सुरक्षित रूप से साइन-आउट कर लिया गया है।", 
+        "info"
+      );
+    } catch (err: any) {
+      console.error("Google logout error:", err);
+    }
+  };
 
   // Sync Google Sheet values function at root level
   const handleQueryGoogleSheet = async (targetId?: string) => {
-    if (!googleSheetUrl) {
-      showToastMsg(lang === "en" ? "Please enter a valid Google Sheet URL first" : "कृपया पहले वैध गूगल शीट का URL दर्ज करें", "info");
-      return;
+    let spreadsheetId = "";
+
+    if (selectedDriveSpreadsheetId) {
+      spreadsheetId = selectedDriveSpreadsheetId;
+    } else if (googleSheetUrl) {
+      if (googleSheetUrl.includes("docs.google.com/spreadsheets")) {
+        const match = googleSheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        if (match && match[1]) {
+          spreadsheetId = match[1];
+        }
+      } else {
+        spreadsheetId = googleSheetUrl.trim();
+      }
     }
 
-    // Extract spreadsheet ID and construct public CSV endpoint
-    let sheetCsvUrl = googleSheetUrl;
-    if (googleSheetUrl.includes("docs.google.com/spreadsheets")) {
-      const match = googleSheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-      if (match && match[1]) {
-        const spreadsheetId = match[1];
-        sheetCsvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/pub?output=csv`;
-      }
+    if (!spreadsheetId) {
+      showToastMsg(
+        lang === "en" ? "Please enter or select a Google Sheet spreadsheet first." : "कृपया पहले वैध गूगल शीट का URL या ID चुनें।", 
+        "info"
+      );
+      return;
     }
 
     setIsSyncingSheet(true);
     try {
-      showToastMsg(lang === "en" ? "Executing VLOOKUP scan on Google sheet..." : "गूगल शीट से वी-लुकअप स्कैन क्रियान्वित किया जा रहा है...", "info");
-      const res = await fetch(sheetCsvUrl);
-      if (!res.ok) {
-        throw new Error("HTTP error " + res.status);
+      let rows: string[][] = [];
+
+      // If user is authenticated, query the Google Sheets REST API directly (no web publishing requirement!)
+      if (gToken) {
+        showToastMsg(
+          lang === "en" ? "Querying secure Google Sheets API..." : "सुरक्षित गूगल शीट्स एपीआई से विवरण मंगाया जा रहा है...", 
+          "info"
+        );
+        const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+          headers: { Authorization: `Bearer ${gToken}` }
+        });
+        if (!metaRes.ok) {
+          const errText = await metaRes.text();
+          throw new Error(`Cloud Sheets metadata read failed: ${errText}`);
+        }
+        const meta = await metaRes.json();
+        const firstSheetName = meta.sheets?.[0]?.properties?.title || "Sheet1";
+
+        showToastMsg(
+          lang === "en" ? `Scanning range on sheet window [${firstSheetName}]...` : `विंडो [${firstSheetName}] से डेटा स्कैन किया जा रहा है...`, 
+          "info"
+        );
+        const range = `${firstSheetName}!A1:L1000`;
+        const valuesRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`, {
+          headers: { Authorization: `Bearer ${gToken}` }
+        });
+        if (!valuesRes.ok) {
+          throw new Error(`Cloud Sheets values read failed: ${valuesRes.statusText}`);
+        }
+        const valuesData = await valuesRes.json();
+        rows = valuesData.values || [];
+      } else {
+        // Fallback to public published CSV parser if they are not authenticated
+        showToastMsg(
+          lang === "en" ? "Reading public web published Google sheet CSV..." : "सार्वजनिक रूप से साझा वेब सीएसवी का मिलान किया जा रहा है...", 
+          "info"
+        );
+        const sheetCsvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/pub?output=csv`;
+        const res = await fetch(sheetCsvUrl);
+        if (!res.ok) {
+          throw new Error(`HTTP status ${res.status}. For private files, please sign in with Google.`);
+        }
+        const text = await res.text();
+        rows = text.split(/\r?\n/).map(line => {
+          return line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(cell => cell.replace(/^"|"$/g, "").trim());
+        });
       }
-      const text = await res.text();
-      
-      // Basic CSV Row Parsing
-      const rows = text.split(/\r?\n/).map(line => {
-        return line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(cell => cell.replace(/^"|"$/g, "").trim());
-      });
 
       if (rows.length < 2) {
-        throw new Error("Target sheet contains no student rows or data ranges.");
+        throw new Error("Connected sheet has no diagnostic records rows.");
       }
 
       const parsedRecords: StudentRecord[] = [];
-      
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        if (row.length < 2 || !row[0]) continue; // Skip empty rows
+        if (!row || row.length < 2 || !row[0]) continue;
 
-        const sId = row[0]; // Student ID
-        const sName = row[1]; // Name
+        const sId = row[0];
+        const sName = row[1];
         const sSchool = row[2] || "Apex Academy Delhi";
         const sClass = row[3] || "c1";
         const sDisability = row[4] || "1";
-        const sCert = row[5] === "TRUE" || row[5] === "Yes" || row[5] === "हाँ" || row[5] === "true";
+        const sCert = row[5] === "TRUE" || row[5] === "Yes" || row[5] === "हाँ" || row[5] === "true" || row[5] === "1";
         const sDob = row[6] || "2018-01-01";
         const sGenTeacher = row[7] || "Mrs. Sharda Sharma";
         const sSpTeacher = row[8] || "Mr. Ramesh Malhotra";
         const sObjective = row[9] || `"By [Target Date], when presented with..."`;
         
-        // Recover checklists if stored
         let parsedChecklists = checklists; 
         if (row[10]) {
           try {
@@ -229,7 +392,6 @@ export default function App() {
           } catch(e) {}
         }
 
-        // Recover notes if stored
         let parsedNotes = notes;
         if (row[11]) {
           try {
@@ -260,7 +422,9 @@ export default function App() {
       if (parsedRecords.length > 0) {
         setStudentsList(parsedRecords);
         localStorage.setItem("iep_all_students", JSON.stringify(parsedRecords));
-        localStorage.setItem("iep_connected_sheet_url", googleSheetUrl);
+        if (googleSheetUrl) {
+          localStorage.setItem("iep_connected_sheet_url", googleSheetUrl);
+        }
         
         const query = targetId;
         if (query) {
@@ -268,28 +432,181 @@ export default function App() {
           if (matched) {
             loadStudent(query, parsedRecords);
           } else {
-            showToastMsg(lang === "en" 
-              ? `Fetched ${parsedRecords.length} records. Search query '${query}' not found in sheet.` 
-              : `शीट से ${parsedRecords.length} रिकॉर्ड मिले। सर्च नंबर '${query}' नहीं मिला।`, 
+            showToastMsg(
+              lang === "en" 
+                ? `Fetched ${parsedRecords.length} records. Roster search key ID '${query}' not found in file.` 
+                : `शीट से ${parsedRecords.length} रिकॉर्ड मिले। परन्तु आवंटित नंबर '${query}' नहीं मिला।`, 
               "info"
             );
           }
         } else {
-          showToastMsg(lang === "en"
-            ? `Successfully synchronized ${parsedRecords.length} student records from Google Sheets VLOOKUP registry!`
-            : `गूगल शीट वी-लुकअप रजिस्ट्री से ${parsedRecords.length} नए छात्र रिकॉर्ड सफलतापूर्वक अपडेट हुए!`,
+          showToastMsg(
+            lang === "en"
+              ? `Successfully synchronized ${parsedRecords.length} student records from Google Sheets Workspace!`
+              : `गूगल शीट वर्कस्पेस से ${parsedRecords.length} छात्र रिकॉर्ड सफलतापूर्वक अपडेट किये गये!`,
             "success"
           );
         }
       } else {
-        throw new Error("No valid student rows scanned.");
+        throw new Error("Scanned data had no valid rows matching template schema.");
       }
-
     } catch (e: any) {
       console.error(e);
-      showToastMsg(lang === "en" 
-        ? "Failed fetching spreadsheet values. Check URL, assure document is 'Published to Web as CSV' under File -> Share."
-        : "शीट की जानकारी फ़ेच करने में त्रुटि। कृपया निश्चित करें कि शीट 'फ़ाइल' -> 'शेयर' में 'Published to Web as CSV' है।",
+      showToastMsg(
+        lang === "en" 
+          ? `Cloud sync failed: ${e.message}. If private, try re-logging to authenticate secure tokens.`
+          : `क्लाउड सिंक विफल: ${e.message}। कृपया सुनिश्चित करें कि आप गूगल से साइन-इन हैं।`,
+        "info"
+      );
+    } finally {
+      setIsSyncingSheet(false);
+    }
+  };
+
+  const handleWriteStudentToGoogleSheet = async (studentIdToSave?: string) => {
+    if (!gToken) {
+      showToastMsg(
+        lang === "en" ? "Please sign in with Google Workspace credentials first." : "क्लाउड सेविंग के लिए कृपया पहले गूगल से साइन इन करें।", 
+        "info"
+      );
+      return;
+    }
+
+    let spreadsheetId = "";
+    if (selectedDriveSpreadsheetId) {
+      spreadsheetId = selectedDriveSpreadsheetId;
+    } else if (googleSheetUrl) {
+      if (googleSheetUrl.includes("docs.google.com/spreadsheets")) {
+        const match = googleSheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        if (match && match[1]) {
+          spreadsheetId = match[1];
+        }
+      } else {
+        spreadsheetId = googleSheetUrl.trim();
+      }
+    }
+
+    if (!spreadsheetId) {
+      showToastMsg(
+        lang === "en" ? "Please set a connected Google Spreadsheet link." : "कृपया पहले वैध गूगल शीट का सूत्र दर्ज करें।", 
+        "info"
+      );
+      return;
+    }
+
+    const targetId = studentIdToSave || activeStudentId;
+    const student = studentsList.find(s => s.id === targetId) || {
+      id: targetId,
+      profile,
+      checklists,
+      notes,
+      draftObjective
+    };
+
+    // User prompt prior to data writing (MANDATORY per Workspace Integration skill docs)
+    const confirmed = window.confirm(
+      lang === "en"
+        ? `Sync and overwrite '${student.profile.studentName || "New Student"}' (ID: ${targetId}) directly inside your connected Google Spreadsheet?\nRange values under this student ID in Row Columns A-L will be updated.`
+        : `क्या आप सीधे अपनी गूगल शीट में '${student.profile.studentName || "नया छात्र"}' (ID: ${targetId}) का रिकॉर्ड सिंक और ओवरराइट करना चाहते हैं? इससे शीट में डेटा रो अपडेट हो जाएगी।`
+    );
+    if (!confirmed) return;
+
+    setIsSyncingSheet(true);
+    try {
+      showToastMsg(lang === "en" ? "Updating cloud spreadsheet dataset..." : "क्लाउड डेटासेट अपडेट किया जा रहा है...", "info");
+
+      // Fetch spreadsheet meta
+      const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+        headers: { Authorization: `Bearer ${gToken}` }
+      });
+      if (!metaRes.ok) {
+        throw new Error("Unable to establish access to the selected spreadsheet file. Verify permissions.");
+      }
+      const meta = await metaRes.json();
+      const firstSheetName = meta.sheets?.[0]?.properties?.title || "Sheet1";
+
+      // Read current values
+      const valuesRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(firstSheetName)}!A1:L1000`, {
+        headers: { Authorization: `Bearer ${gToken}` }
+      });
+      let rows: string[][] = [];
+      if (valuesRes.ok) {
+        const valuesData = await valuesRes.json();
+        rows = valuesData.values || [];
+      }
+
+      // Format target student data values
+      const p = student.profile;
+      const newRow = [
+        targetId,
+        p.studentName || "",
+        p.schoolName || "",
+        p.className || "",
+        p.disabilityType || "",
+        p.disabilityCertificate ? "TRUE" : "FALSE",
+        p.dateOfBirth || "",
+        p.generalTeacher || "",
+        p.specialTeacher || "",
+        student.draftObjective || "",
+        JSON.stringify(student.checklists || {}),
+        JSON.stringify(student.notes || {})
+      ];
+
+      // Find matching row
+      let matchedIndex = -1;
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i] && rows[i][0] === targetId) {
+          matchedIndex = i;
+          break;
+        }
+      }
+
+      let updateUrl = "";
+      let method = "PUT";
+      let bodyValueRange: any = {};
+
+      if (matchedIndex !== -1) {
+        const rowIndex = matchedIndex + 1;
+        const range = `${firstSheetName}!A${rowIndex}:L${rowIndex}`;
+        updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
+        bodyValueRange = {
+          range,
+          majorDimension: "ROWS",
+          values: [newRow]
+        };
+      } else {
+        const range = `${firstSheetName}!A1:L1`;
+        updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
+        bodyValueRange = {
+          values: [newRow]
+        };
+        method = "POST";
+      }
+
+      const writeRes = await fetch(updateUrl, {
+        method,
+        headers: {
+          Authorization: `Bearer ${gToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(bodyValueRange)
+      });
+
+      if (!writeRes.ok) {
+        const errText = await writeRes.text();
+        throw new Error(errText);
+      }
+
+      showToastMsg(
+        lang === "en"
+          ? `Successfully exported and cloud-secured '${student.profile.studentName}' record inside Google Sheets!`
+          : `गूगल शीट में '${student.profile.studentName}' का रिकॉर्ड सफलतापूर्वक सिंक कर दिया गया है!`,
+        "success"
+      );
+    } catch (e: any) {
+      console.error(e);
+      showToastMsg(
+        lang === "en" ? `Export failed: ${e.message}` : `क्लाउड सिंक विफल रहा: ${e.message}`, 
         "info"
       );
     } finally {
@@ -462,11 +779,11 @@ export default function App() {
     showToastMsg(lang === "en" ? "Logged out from Admin Panel" : "एडमिन पैनल से लॉग आउट हो गए हैं", "info");
   };
 
-  const handleNavigation = (tab: "Dashboard" | "Live Dashboard" | "Admin Panel") => {
+  const handleNavigation = (tab: "Dashboard" | "Live Dashboard" | "BASIC-MR Tool" | "Hearing Impairment Tool" | "National Institutes Hub" | "Admin Panel") => {
     if (tab === "Admin Panel" && !unlocked) {
       setShowPinOverlay(true);
     } else {
-      if ((tab === "Dashboard" || tab === "Live Dashboard") && activeTab === "Admin Panel") {
+      if ((tab === "Dashboard" || tab === "Live Dashboard" || tab === "BASIC-MR Tool" || tab === "Hearing Impairment Tool" || tab === "National Institutes Hub") && activeTab === "Admin Panel") {
         setUnlocked(false);
         localStorage.removeItem("iep_admin_unlocked");
         showToastMsg(lang === "en" ? "Logged out dynamically" : "स्वचालित रूप से लॉग आउट किया गया", "info");
@@ -545,6 +862,45 @@ export default function App() {
           >
             <PieChart className="w-4 h-4" />
             {lang === "en" ? "Live Dashboard" : "लाइव डैशबोर्ड"}
+          </button>
+
+          <button
+            id="tab-basic-mr"
+            onClick={() => handleNavigation("BASIC-MR Tool")}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+              activeTab === "BASIC-MR Tool" 
+                ? "bg-indigo-600 text-white shadow-md font-semibold" 
+                : "text-slate-500 hover:text-indigo-600 hover:bg-slate-200/50"
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            {lang === "en" ? "BASIC-MR Tool" : "बेसिक-एमआर टूल"}
+          </button>
+
+          <button
+            id="tab-hi-tool"
+            onClick={() => handleNavigation("Hearing Impairment Tool")}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+              activeTab === "Hearing Impairment Tool" 
+                ? "bg-indigo-600 text-white shadow-md font-semibold" 
+                : "text-slate-500 hover:text-indigo-600 hover:bg-slate-200/50"
+            }`}
+          >
+            <Volume2 className="w-4 h-4" />
+            {lang === "en" ? "Hearing Impairment Tool" : "श्रवण अक्षमता टूल (HI)"}
+          </button>
+
+          <button
+            id="tab-national-institutes"
+            onClick={() => handleNavigation("National Institutes Hub")}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+              activeTab === "National Institutes Hub" 
+                ? "bg-indigo-600 text-white shadow-md font-semibold" 
+                : "text-slate-500 hover:text-indigo-600 hover:bg-slate-200/50"
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            {lang === "en" ? "National Institutes Hub" : "राष्ट्रीय संस्थान हब"}
           </button>
           
           <button
@@ -639,6 +995,27 @@ export default function App() {
                 lang={lang}
                 studentsList={studentsList}
               />
+            ) : activeTab === "BASIC-MR Tool" ? (
+              <BasicMrAssessmentView
+                lang={lang}
+                studentsList={studentsList}
+                activeStudentId={activeStudentId}
+                onLoadStudent={loadStudent}
+                showToastMsg={showToastMsg}
+              />
+            ) : activeTab === "Hearing Impairment Tool" ? (
+              <HearingImpairmentView
+                lang={lang}
+                studentsList={studentsList}
+                activeStudentId={activeStudentId}
+                onLoadStudent={loadStudent}
+                showToastMsg={showToastMsg}
+              />
+            ) : activeTab === "National Institutes Hub" ? (
+              <NationalInstitutesHubView
+                lang={lang}
+                showToastMsg={showToastMsg}
+              />
             ) : (
               <AdminPanelView
                 lang={lang}
@@ -659,6 +1036,15 @@ export default function App() {
                 isSyncingSheet={isSyncingSheet}
                 onQueryGoogleSheet={handleQueryGoogleSheet}
                 onDownloadCSV={() => handleManualSaveStudent(undefined, true)}
+                gUser={gUser}
+                gToken={gToken}
+                driveSpreadsheets={driveSpreadsheets}
+                selectedDriveSpreadsheetId={selectedDriveSpreadsheetId}
+                onSelectDriveSpreadsheetId={setSelectedDriveSpreadsheetId}
+                onGoogleLogin={handleGoogleLogin}
+                onGoogleLogout={handleGoogleLogout}
+                onWriteStudentToGoogleSheet={handleWriteStudentToGoogleSheet}
+                isLoadingSpreadsheets={isLoadingSpreadsheets}
               />
             )}
           </div>
